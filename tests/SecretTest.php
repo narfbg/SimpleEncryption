@@ -118,7 +118,6 @@ class SecretTest extends PHPUnit_Framework_TestCase {
 	 * without preventing other tests from executing.
 	 *
 	 * @depends	testMbstringOverrideBasic
-	 * @uses	getMbstringOverrides
 	 * @runInSeparateProcess
 	 */
 	public function testMbstringOverrideExtensive()
