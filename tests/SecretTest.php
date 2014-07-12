@@ -202,7 +202,6 @@ class SecretTest extends PHPUnit_Framework_TestCase {
 	{
 		$this->assertEquals(8, $strlen->invoke(null, 'осем'), 'Secret::strlen() is not byte-safe!');
 
-		$this->assertEquals('осем', $substr->invoke(null, 'осем', 0));
 		$this->assertEquals(7, $this->strlen($substr->invoke(null, 'осем', 1)));
 		$this->assertEquals(2, $this->strlen($substr->invoke(null, 'осем', 1, 2)));
 		$this->assertEquals(3, $this->strlen($substr->invoke(null, 'осем', 0, 3)));
