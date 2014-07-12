@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit
+	bootstrap="bootstrap.php"
+	colors="true"
+	convertErrorsToExceptions="true"
+	convertNoticesToExceptions="true"
+	convertWarningsToExceptions="true"
+	stopOnFailure="false"
+>
+	<testsuites>
+		<testsuite name="SimpleEncryption tests">
+			<directory suffix="Test.php">./</directory>
+		</testsuite>
+	</testsuites>
+	<filter>
+		<whitelist>
+			<directory suffix=".php">../src</directory>
+			<exclude>
+				<directory>../vendor</directory>
+			</exclude>
+		</whitelist>		
+	</filter>
+</phpunit>
