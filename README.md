@@ -1,9 +1,13 @@
+
+
 Simple Encryption for PHP
 =========================
 
 A PHP library for symmetric encryption, making it easy, safe and accessible for everybody.
 
 **EXPERIMENTAL! DO NOT use this library until the 1.0 version is tagged!**
+
+[![Build Status](https://travis-ci.org/narfbg/SimpleEncryption.svg?branch=master)](https://travis-ci.org/narfbg/SimpleEncryption)
 
 Introduction
 ------------

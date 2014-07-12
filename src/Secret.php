@@ -425,6 +425,7 @@ class Secret {
 	{
 		if (self::$mbstringOverride === true)
 		{
+			// mb_substr($string, $start, null, '8bit') returns an empty string on PHP 5.3
 			isset($length) OR $length = ($start >= 0 ? self::strlen($string) - $start : -$start);
 			return \mb_substr($string, $start, $length, '8bit');
 		}
