@@ -1,5 +1,5 @@
 {
-	"name": "Narf/SimpleEncryption",
+	"name": "narf/simple-encryption",
 	"type": "library",
 	"version": "0.2-alpha",
 	"description": "A simple library for symmetric encryption under PHP",
