@@ -301,7 +301,7 @@ class Secret {
 	 */
 	private function authenticate(&$cipherText, $hmacKey)
 	{
-		if (self::strlen($cipherText) <= 32)
+		if (self::strlen($cipherText) <= 64)
 		{
 			throw new \RuntimeException('Authentication failed: Message is too short');
 		}
