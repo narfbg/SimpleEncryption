@@ -168,9 +168,9 @@ class Secret {
 		$this->authenticate($data, $hmacKey);
 
 		$data = $this->{self::$handler.'Decrypt'}(
-			$this->substr($data, 16),
+			self::substr($data, 16),
 			$cipherKey,
-			$this->substr($data, 0, 16)
+			self::substr($data, 0, 16)
 		);
 
 		if ($data === false)
