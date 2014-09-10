@@ -177,6 +177,8 @@ class SecretTest extends PHPUnit_Framework_TestCase {
 	{
 		if ($this->mbstring)
 		{
+			// mb_substr($string, $start, null, '8bit') returns an empty string on PHP 5.3
+			isset($length) OR $length = ($start >= 0 ? $this->strlen($str) - $start : -$start);
 			return mb_substr($str, $start, $length, '8bit');
 		}
 
@@ -872,8 +874,8 @@ class SecretTest extends PHPUnit_Framework_TestCase {
 		$cipherText = $instance->getCipherText();
 		list(, $hmacKey) = str_split(Secret::hkdf(str_repeat("\xaf", 32), 'sha512', 64, 'aes-256-ctr-hmac-sha256'), 32);
 		$this->assertEquals(
-			hash_hmac('sha256', $this->substr(base64_decode($cipherText, true), 32), $hmacKey, true),
-			$this->substr(base64_decode($cipherText, true), 0, 32),
+			hash_hmac('sha256', $this->substr(base64_decode($cipherText), 32), $hmacKey, true),
+			$this->substr(base64_decode($cipherText), 0, 32),
 			'Secret::getCipherText() did not properly derive keys.'
 		);
 	}
