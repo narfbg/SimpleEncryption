@@ -674,30 +674,42 @@ class SecretTest extends PHPUnit_Framework_TestCase {
 		$authenticate = $reflection->getMethod('authenticate');
 		$authenticate->setAccessible(true);
 
-		// Invalid length, shorter than the hash size (hex-encoded)
+		// Invalid length, shorter than the hash size
 		$test = false;
-		try { $authenticate->invoke($instance, 'shorter than 64 characters', 'hmacKey'); }
+		try { $authenticate->invoke($instance, 'shorter than 32 characters', 'hmacKey'); }
 		catch (RuntimeException $e) { $test = true; }
 		$this->assertTrue($test, 'Secret::authenticate() accepts messages with invalid lengths.');
 
+		// Invalid length, longer than the hash size, but not dividable by 4 (this is a Base64-validity check too)
+		$test = false;
+		try { $authenticate->invoke($instance, str_repeat('0', 33), 'hmacKey'); }
+		catch (RuntimeException $e) { $test = true; }
+		$this->assertTrue($test, 'Secret::authenticate() accepts messages with invalid lengths.');
+
+		// Valid length, but not valid Base64
+		$test = false;
+		try { $authenticate->invoke($instance, str_repeat('1', 31).'$', 'hmacKey'); }
+		catch (RuntimeException $e) { $test = true; }
+		$this->assertTrue($test, 'Secret::authenticate() accepts invalid Base64 strings.');
+
 		// Invalid key
 		$test = false;
-		try { $authenticate->invoke($instance, "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7", "\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a"); }
+		try { $authenticate->invoke($instance, "\xb0\x34\x4c\x61\xd8\xdb\x38\x53\x5c\xa8\xaf\xce\xaf\x0b\xf1\x2b\x88\x1d\xc2\x00\xc9\x83\x3d\xa7\x26\xe9\x37\x6c\x2e\x32\xcf\xf7", "\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a"); }
 		catch (RuntimeException $e) { $test = true; }
 		$this->assertTrue($test, 'Secret::authenticate() failed to trigger an error for a HMAC with a wrong key.');
 
 		// Invalid hash
 		$test = false;
-		try { $authenticate->invoke($instance, "a0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7", "\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b"); }
+		try { $authenticate->invoke($instance, "\xa0\x34\x4c\x61\xd8\xdb\x38\x53\x5c\xa8\xaf\xce\xaf\x0b\xf1\x2b\x88\x1d\xc2\x00\xc9\x83\x3d\xa7\x26\xe9\x37\x6c\x2e\x32\xcf\xf7", "\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b"); }
 		catch (RuntimeException $e) { $test = true; }
 		$this->assertTrue($test, 'Secret::authenticate() failed to trigger an error for a forged HMAC.');
 
-		// Valid usage, should strip the HMAC after validating it
+		// Valid usage, should strip the Base64 encoding and HMAC after validating it
 		$data = 'dummy string';
-		$data = hash_hmac('sha256', $data, str_repeat('32', 32), false).$data;
+		$data = base64_encode(hash_hmac('sha256', $data, str_repeat('32', 32), true).$data);
 		// ReflectionMethod is dumb and doesn't understand references
 		$authenticate->invokeArgs($instance, array(&$data, str_repeat('32', 32)));
-		$this->assertEquals($data, 'dummy string', 'Secret::authenticate() does not strip the HMAC message after validating it.');
+		$this->assertEquals($data, 'dummy string', 'Secret::authenticate() does not strip Base64 encoding and/or the HMAC message after validating them.');
 	}
 
 	/**
@@ -810,8 +822,7 @@ class SecretTest extends PHPUnit_Framework_TestCase {
 			// Test encryption
 			$instance = new Secret('Test message');
 			$cipherText = $instance->getCipherText();
-
-			$this->assertEquals(1, preg_match('#^[0-9a-f]{64}[A-Za-z0-9+=/]{40}$#', $cipherText), 'Secret::getCipherText() produced an unexpected result.');
+			$this->assertEquals(1, preg_match('#^[A-Za-z0-9+=/]{80}$#', $cipherText), 'Secret::getCipherText() produced an unexpected result.');
 			// A 128-bit key should be automatically generated
 			$reflection = new ReflectionClass($instance);
 			$key = $reflection->getProperty('masterKey');
@@ -830,8 +841,8 @@ class SecretTest extends PHPUnit_Framework_TestCase {
 			$this->assertNotEquals($cipherText, $cipherTextNew, 'Secret::getCipherText() produced the same cipherText that was previously decrypted.');
 			// We'll check the IVs as well
 			$this->assertNotEquals(
-				$this->substr(base64_decode(substr($cipherText, 64)), 0, 16),
-				$this->substr(base64_decode(substr($cipherTextNew, 64)), 0, 16),
+				$this->substr(base64_decode($cipherText, true), 32, 16),
+				$this->substr(base64_decode($cipherTextNew, true), 32, 16),
 				'Secret::getCipherText() reuses IVs!'
 			);
 
@@ -861,8 +872,8 @@ class SecretTest extends PHPUnit_Framework_TestCase {
 		$cipherText = $instance->getCipherText();
 		list(, $hmacKey) = str_split(Secret::hkdf(str_repeat("\xaf", 32), 'sha512', 64, 'aes-256-ctr-hmac-sha256'), 32);
 		$this->assertEquals(
-			hash_hmac('sha256', substr($cipherText, 64), $hmacKey, false),
-			substr($cipherText, 0, 64),
+			hash_hmac('sha256', $this->substr(base64_decode($cipherText, true), 32), $hmacKey, true),
+			$this->substr(base64_decode($cipherText, true), 0, 32),
 			'Secret::getCipherText() did not properly derive keys.'
 		);
 	}

@@ -110,8 +110,8 @@ class Secret {
 	 *  - If the input was a plain-text message and no master key is set, the key is generated
 	 *  - Generates a random IV
 	 *  - Derives a cipher and a HMAC key from the master key, via HKDF
-	 *  - Encrypts the plainText message, prepends the IV to it and encodes it using Base64
-	 *  - Prepends a HMAC-SHA256 message to the Base64-encoded string
+	 *  - Encrypts the plainText message and prepends the IV to it
+	 *  - Prepends a HMAC-SHA256 message to the cipher text encodes it using Base64
 	 *
 	 * The result is not cached and the whole process is repeated for each call,
 	 * resulting in different IV and cipher text every time.
@@ -136,8 +136,7 @@ class Secret {
 			// @codeCoverageIgnoreEnd
 		}
 
-		$data = base64_encode($iv.$data);
-		return hash_hmac('sha256', $data, $hmacKey, false).$data;
+		return base64_encode(hash_hmac('sha256', $iv.$data, $hmacKey, true).$iv.$data);
 	}
 
 	/**
@@ -147,8 +146,9 @@ class Secret {
 	 *
 	 *  - If the input was a plain-text message, simply returns it
 	 *  - The cipher and HMAC keys are derived from the master key
-	 *  - Calls authenticate(), which strips the HMAC message
-	 *  - Decodes the Base64 string, separates the IV and decrypts the message
+	 *  - Validates and strips Base64 encoding
+	 *  - Calls authenticate(), which strips the Base64 encoding and HMAC message
+	 *  - Separates the IV and decrypts the message
 	 *
 	 * The result is cached to speed-up subsequent calls.
 	 *
@@ -166,7 +166,6 @@ class Secret {
 		// authenticate() receives $data by reference
 		$data = $this->inputText;
 		$this->authenticate($data, $hmacKey);
-		$data = base64_decode($data);
 
 		$data = $this->{self::$handler.'Decrypt'}(
 			$this->substr($data, 16),
@@ -292,8 +291,8 @@ class Secret {
 	/**
 	 * authenticate()
 	 *
-	 * Separates the HMAC message from the cipher text and verifies them
-	 * in a way that prevents timing attacks.
+	 * Validates and strips Base64 encoding, then separates the HMAC message from
+	 * the cipher text and verifies them in a way that prevents timing attacks.
 	 *
 	 * @param	string	&$cipherText	Cipher text
 	 * @param	string	$hmacKey	HMAC key
@@ -301,14 +300,18 @@ class Secret {
 	 */
 	private function authenticate(&$cipherText, $hmacKey)
 	{
-		if (self::strlen($cipherText) <= 64)
+		if (($length = self::strlen($cipherText)) <= 32 OR ($length % 4) !== 0)
 		{
-			throw new \RuntimeException('Authentication failed: Message is too short');
+			throw new \RuntimeException('Authentication failed: Invalid length');
+		}
+		elseif (($cipherText = base64_decode($cipherText, true)) === false)
+		{
+			throw new \RuntimeException('Authentication failed: Input data is not a valid Base64 string.');
 		}
 
-		$hmacRecv = self::substr($cipherText, 0, 64);
-		$cipherText = self::substr($cipherText, 64);
-		$hmacCalc = hash_hmac('sha256', $cipherText, $hmacKey, false);
+		$hmacRecv = self::substr($cipherText, 0, 32);
+		$cipherText = self::substr($cipherText, 32);
+		$hmacCalc = hash_hmac('sha256', $cipherText, $hmacKey, true);
 
 		/**
 		 * Double HMAC verification
