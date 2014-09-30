@@ -222,6 +222,7 @@ class Secret {
 
 		if (is_readable('/dev/urandom') && ($fp = fopen('/dev/urandom', 'rb')) !== false)
 		{
+			stream_set_chunk_size($fp, $length);
 			$output = fread($fp, $length);
 			fclose($fp);
 			if ($output !== false)
