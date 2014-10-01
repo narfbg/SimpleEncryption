@@ -13,7 +13,7 @@ class SecretTest extends PHPUnit_Framework_TestCase {
 	public function setUp()
 	{
 		$this->mcrypt = extension_loaded('mcrypt');
-		$this->openssl = function_exists('openssl_cipher_iv_length');
+		$this->openssl = extension_loaded('openssl');
 		$this->mbstring = extension_loaded('mbstring');
 	}
 
@@ -177,8 +177,6 @@ class SecretTest extends PHPUnit_Framework_TestCase {
 	{
 		if ($this->mbstring)
 		{
-			// mb_substr($string, $start, null, '8bit') returns an empty string on PHP 5.3
-			isset($length) OR $length = ($start >= 0 ? $this->strlen($str) - $start : -$start);
 			return mb_substr($str, $start, $length, '8bit');
 		}
 

@@ -63,7 +63,7 @@ class Secret {
 		{
 			// @codeCoverageIgnoreStart
 			if (extension_loaded('mcrypt')) self::$handler = 'mcrypt';
-			elseif (function_exists('openssl_cipher_iv_length')) self::$handler = 'openssl';
+			elseif (extension_loaded('openssl')) self::$handler = 'openssl';
 			else throw new \RuntimeException('No encryption handler available. You need to install one of MCrypt or OpenSSL.');
 			// @codeCoverageIgnoreEnd
 
@@ -429,8 +429,6 @@ class Secret {
 	{
 		if (self::$mbstringOverride === true)
 		{
-			// mb_substr($string, $start, null, '8bit') returns an empty string on PHP 5.3
-			isset($length) OR $length = ($start >= 0 ? self::strlen($string) - $start : -$start);
 			return \mb_substr($string, $start, $length, '8bit');
 		}
 
