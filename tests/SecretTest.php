@@ -637,8 +637,7 @@ class SecretTest extends PHPUnit_Framework_TestCase {
 				"\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c\x0c",
 				'sha1',
 				42,
-				'',
-				null
+				''
 			),
 			'HKDF test vector 7 failed!'
 		);
