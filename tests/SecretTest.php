@@ -516,29 +516,28 @@ class SecretTest extends PHPUnit_Framework_TestCase {
 		$authenticate = $reflection->getMethod('authenticate');
 		$authenticate->setAccessible(true);
 
-		// authenticate() accepts the cipherText by reference ...
-		$variable = null;
-		$reference = &$variable;
-
+		// Note: authenticate() accepts the cipherText by reference and
+		//       ReflectionMethod::invoke() is dumb and doesn't understand
+		//       references, so we have to use invokeArgs() instead ...
 
 		// Invalid length, shorter than the hash size
 		$test = false;
 		$variable = 'shorter than 32 characters';
-		try { $authenticate->invoke($instance, $reference, 'hmacKey'); }
+		try { $authenticate->invokeArgs($instance, array(&$variable, 'hmacKey')); }
 		catch (RuntimeException $e) { $test = true; }
 		$this->assertTrue($test, 'Secret::authenticate() accepts messages with invalid lengths.');
 
 		// Invalid length, longer than the hash size, but not dividable by 4 (this is a Base64-validity check too)
 		$test = false;
 		$variable = str_repeat('0', 33);
-		try { $authenticate->invoke($instance, $reference, 'hmacKey'); }
+		try { $authenticate->invokeArgs($instance, array(&$variable, 'hmacKey')); }
 		catch (RuntimeException $e) { $test = true; }
 		$this->assertTrue($test, 'Secret::authenticate() accepts messages with invalid lengths.');
 
 		// Valid length, but not valid Base64
 		$test = false;
 		$variable = str_repeat('1', 31).'$';
-		try { $authenticate->invoke($instance, $reference, 'hmacKey'); }
+		try { $authenticate->invokeArgs($instance, array(&$variable, 'hmacKey')); }
 		catch (RuntimeException $e) { $test = true; }
 		$this->assertTrue($test, 'Secret::authenticate() accepts invalid Base64 strings.');
 
@@ -547,10 +546,9 @@ class SecretTest extends PHPUnit_Framework_TestCase {
 		$variable = "\xb0\x34\x4c\x61\xd8\xdb\x38\x53\x5c\xa8\xaf\xce\xaf\x0b\xf1\x2b\x88\x1d\xc2\x00\xc9\x83\x3d\xa7\x26\xe9\x37\x6c\x2e\x32\xcf\xf7";
 		try
 		{
-			$authenticate->invoke(
+			$authenticate->invokeArgs(
 				$instance,
-				$reference,
-				"\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a"
+				array(&$variable, "\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a")
 			);
 		}
 		catch (RuntimeException $e) { $test = true; }
@@ -561,10 +559,9 @@ class SecretTest extends PHPUnit_Framework_TestCase {
 		$variable = "\xa0\x34\x4c\x61\xd8\xdb\x38\x53\x5c\xa8\xaf\xce\xaf\x0b\xf1\x2b\x88\x1d\xc2\x00\xc9\x83\x3d\xa7\x26\xe9\x37\x6c\x2e\x32\xcf\xf7";
 		try
 		{
-			$authenticate->invoke(
+			$authenticate->invokeArgs(
 				$instance,
-				$reference,
-				"\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b"
+				array(&$variable, "\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b")
 			);
 		}
 		catch (RuntimeException $e) { $test = true; }
@@ -573,7 +570,6 @@ class SecretTest extends PHPUnit_Framework_TestCase {
 		// Valid usage, should strip the Base64 encoding and HMAC after validating it
 		$data = 'dummy string';
 		$data = base64_encode(hash_hmac('sha256', $data, str_repeat('32', 32), true).$data);
-		// ReflectionMethod is dumb and doesn't understand references
 		$authenticate->invokeArgs($instance, array(&$data, str_repeat('32', 32)));
 		$this->assertEquals($data, 'dummy string', 'Secret::authenticate() does not strip Base64 encoding and/or the HMAC message after validating them.');
 	}
