@@ -10,6 +10,6 @@ sudo: false
 
 matrix:
   allow_failures:
-     - 7
+     - php: 7
 
 script: phpunit --coverage-text --configuration tests/phpunit.xml
