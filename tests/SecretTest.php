@@ -516,33 +516,57 @@ class SecretTest extends PHPUnit_Framework_TestCase {
 		$authenticate = $reflection->getMethod('authenticate');
 		$authenticate->setAccessible(true);
 
+		// authenticate() accepts the cipherText by reference ...
+		$variable = null;
+		$reference = &$variable;
+
+
 		// Invalid length, shorter than the hash size
 		$test = false;
-		try { $authenticate->invoke($instance, 'shorter than 32 characters', 'hmacKey'); }
+		$variable = 'shorter than 32 characters';
+		try { $authenticate->invoke($instance, $reference, 'hmacKey'); }
 		catch (RuntimeException $e) { $test = true; }
 		$this->assertTrue($test, 'Secret::authenticate() accepts messages with invalid lengths.');
 
 		// Invalid length, longer than the hash size, but not dividable by 4 (this is a Base64-validity check too)
 		$test = false;
-		try { $authenticate->invoke($instance, str_repeat('0', 33), 'hmacKey'); }
+		$variable = str_repeat('0', 33);
+		try { $authenticate->invoke($instance, $reference, 'hmacKey'); }
 		catch (RuntimeException $e) { $test = true; }
 		$this->assertTrue($test, 'Secret::authenticate() accepts messages with invalid lengths.');
 
 		// Valid length, but not valid Base64
 		$test = false;
-		try { $authenticate->invoke($instance, str_repeat('1', 31).'$', 'hmacKey'); }
+		$variable = str_repeat('1', 31).'$';
+		try { $authenticate->invoke($instance, $reference, 'hmacKey'); }
 		catch (RuntimeException $e) { $test = true; }
 		$this->assertTrue($test, 'Secret::authenticate() accepts invalid Base64 strings.');
 
 		// Invalid key
 		$test = false;
-		try { $authenticate->invoke($instance, "\xb0\x34\x4c\x61\xd8\xdb\x38\x53\x5c\xa8\xaf\xce\xaf\x0b\xf1\x2b\x88\x1d\xc2\x00\xc9\x83\x3d\xa7\x26\xe9\x37\x6c\x2e\x32\xcf\xf7", "\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a"); }
+		$variable = "\xb0\x34\x4c\x61\xd8\xdb\x38\x53\x5c\xa8\xaf\xce\xaf\x0b\xf1\x2b\x88\x1d\xc2\x00\xc9\x83\x3d\xa7\x26\xe9\x37\x6c\x2e\x32\xcf\xf7";
+		try
+		{
+			$authenticate->invoke(
+				$instance,
+				$reference,
+				"\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a"
+			);
+		}
 		catch (RuntimeException $e) { $test = true; }
 		$this->assertTrue($test, 'Secret::authenticate() failed to trigger an error for a HMAC with a wrong key.');
 
 		// Invalid hash
 		$test = false;
-		try { $authenticate->invoke($instance, "\xa0\x34\x4c\x61\xd8\xdb\x38\x53\x5c\xa8\xaf\xce\xaf\x0b\xf1\x2b\x88\x1d\xc2\x00\xc9\x83\x3d\xa7\x26\xe9\x37\x6c\x2e\x32\xcf\xf7", "\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b"); }
+		$variable = "\xa0\x34\x4c\x61\xd8\xdb\x38\x53\x5c\xa8\xaf\xce\xaf\x0b\xf1\x2b\x88\x1d\xc2\x00\xc9\x83\x3d\xa7\x26\xe9\x37\x6c\x2e\x32\xcf\xf7";
+		try
+		{
+			$authenticate->invoke(
+				$instance,
+				$reference,
+				"\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b"
+			);
+		}
 		catch (RuntimeException $e) { $test = true; }
 		$this->assertTrue($test, 'Secret::authenticate() failed to trigger an error for a forged HMAC.');
 
