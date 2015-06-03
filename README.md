@@ -38,7 +38,7 @@ Requirements
 ------------
 
 - PHP 5.4
-- MCrypt or OpenSSL extension
+- OpenSSL extension
 
 Installation and loading
 ------------------------
