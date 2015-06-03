@@ -32,7 +32,7 @@ namespace Narf\SimpleEncryption;
 
 class Secret {
 
-	const VERSION = '0.2-alpha';
+	const VERSION = '0.3.0';
 
 	// These are passed to the constructor to specify the
 	// input data type. In the future, when the default
@@ -45,10 +45,6 @@ class Secret {
 	// Data placeholders
 	private $inputText, $inputType, $masterKey;
 
-	// Configuration values
-	private static $handler;
-	private static $mbstringOverride;
-
 	/**
 	 * __construct()
 	 *
@@ -58,18 +54,6 @@ class Secret {
 	 */
 	public function __construct($inputText, $masterKey = null, $inputType = null)
 	{
-		// Initial configuration
-		if ( ! isset(self::$handler))
-		{
-			// @codeCoverageIgnoreStart
-			if (extension_loaded('mcrypt')) self::$handler = 'mcrypt';
-			elseif (extension_loaded('openssl')) self::$handler = 'openssl';
-			else throw new \RuntimeException('No encryption handler available. You need to install one of MCrypt or OpenSSL.');
-			// @codeCoverageIgnoreEnd
-
-			self::$mbstringOverride = (extension_loaded('mbstring') && ini_get('mbstring.func_overload'));
-		}
-
 		// Validate input type
 		if (isset($inputType))
 		{
@@ -88,12 +72,12 @@ class Secret {
 		// Validate key (length) if it exists, and guess the input type if necessary
 		if (isset($masterKey))
 		{
-			if ( ! preg_match('/^[0-9a-f]{64}$/i', $masterKey))
+			if ( ! \preg_match('/^[0-9a-f]{64}$/i', $masterKey))
 			{
 				throw new \InvalidArgumentException('Invalid key format, please use getKey() to create your own keys.');
 			}
 
-			$this->masterKey = pack('H*', $masterKey);
+			$this->masterKey = \pack('H*', $masterKey);
 			isset($this->inputType) OR $this->inputType = self::ENCRYPTED;
 		}
 		elseif ( ! isset($this->inputType)) $this->inputType = self::PLAINTEXT;
@@ -121,22 +105,22 @@ class Secret {
 	public function getCipherText()
 	{
 		if (isset($this->masterKey)) $iv = self::getRandomBytes(16, true);
-		else list($this->masterKey, $iv) = str_split(self::getRandomBytes(48, true), 32);
+		else list($this->masterKey, $iv) = \str_split(self::getRandomBytes(48, true), 32);
 
-		list($cipherKey, $hmacKey) = str_split(self::hkdf($this->masterKey, 'sha512', 64, 'aes-256-ctr-hmac-sha256'), 32);
+		list($cipherKey, $hmacKey) = \str_split(self::hkdf($this->masterKey, 'sha512', 64, 'aes-256-ctr-hmac-sha256'), 32);
 
 		$data = ($this->inputType === self::PLAINTEXT)
 			? $this->inputText
 			: $this->getPlainText();
 
-		if (($data = $this->{self::$handler.'Encrypt'}($data, $cipherKey, $iv)) === false)
+		if (($data = \openssl_encrypt($data, 'aes-256-ctr', $cipherKey, 1, $iv)) === false)
 		{
 			// @codeCoverageIgnoreStart
 			throw new \RuntimeException('Error during encryption procedure.');
 			// @codeCoverageIgnoreEnd
 		}
 
-		return base64_encode(hash_hmac('sha256', $iv.$data, $hmacKey, true).$iv.$data);
+		return \base64_encode(\hash_hmac('sha256', $iv.$data, $hmacKey, true).$iv.$data);
 	}
 
 	/**
@@ -161,15 +145,17 @@ class Secret {
 			return $this->inputText;
 		}
 
-		list($cipherKey, $hmacKey) = str_split(self::hkdf($this->masterKey, 'sha512', 64, 'aes-256-ctr-hmac-sha256'), 32);
+		list($cipherKey, $hmacKey) = \str_split(self::hkdf($this->masterKey, 'sha512', 64, 'aes-256-ctr-hmac-sha256'), 32);
 
 		// authenticate() receives $data by reference
 		$data = $this->inputText;
 		$this->authenticate($data, $hmacKey);
 
-		$data = $this->{self::$handler.'Decrypt'}(
+		$data = \openssl_decrypt(
 			self::substr($data, 16),
+			'aes-256-ctr',
 			$cipherKey,
+			1,
 			self::substr($data, 0, 16)
 		);
 
@@ -193,7 +179,7 @@ class Secret {
 	public function getKey()
 	{
 		isset($this->masterKey) OR $this->masterKey = self::getRandomBytes(32, true);
-		return bin2hex($this->masterKey);
+		return \bin2hex($this->masterKey);
 	}
 
 	/**
@@ -212,31 +198,30 @@ class Secret {
 		}
 
 		// @codeCoverageIgnoreStart
-		if (defined('MCRYPT_DEV_URANDOM'))
-		{
-			if (($output = mcrypt_create_iv($length, MCRYPT_DEV_URANDOM)) !== false)
-			{
-				return ($rawOutput) ? $output : bin2hex($output);
-			}
-		}
-
-		if (is_readable('/dev/urandom') && ($fp = fopen('/dev/urandom', 'rb')) !== false)
-		{
-			stream_set_chunk_size($fp, $length);
-			$output = fread($fp, $length);
-			fclose($fp);
-			if ($output !== false)
-			{
-				return ($rawOutput) ? $output : bin2hex($output);
-			}
-		}
-
-		if (function_exists('openssl_random_pseudo_bytes'))
+		if (\function_exists('openssl_random_pseudo_bytes'))
 		{
 			$cryptoStrong = null;
-			if (($output = openssl_random_pseudo_bytes($length, $cryptoStrong)) !== false && $cryptoStrong)
+			if (($output = \openssl_random_pseudo_bytes($length, $cryptoStrong)) !== false && $cryptoStrong)
 			{
-				return ($rawOutput) ? $output : bin2hex($output);
+				return ($rawOutput) ? $output : \bin2hex($output);
+			}
+		}
+		if (\defined('MCRYPT_DEV_URANDOM'))
+		{
+			if (($output = \mcrypt_create_iv($length, MCRYPT_DEV_URANDOM)) !== false)
+			{
+				return ($rawOutput) ? $output : \bin2hex($output);
+			}
+		}
+
+		if (\is_readable('/dev/urandom') && ($fp = \fopen('/dev/urandom', 'rb')) !== false)
+		{
+			\stream_set_chunk_size($fp, $length);
+			$output = \fread($fp, $length);
+			\fclose($fp);
+			if ($output !== false)
+			{
+				return ($rawOutput) ? $output : \bin2hex($output);
 			}
 		}
 
@@ -264,7 +249,7 @@ class Secret {
 
 		if ( ! isset($digests[$digest]))
 		{
-			if (in_array($digest, hash_algos(), true)) $digests[$digest] = self::strlen(hash($digest, '', true));
+			if (\in_array($digest, \hash_algos(), true)) $digests[$digest] = self::strlen(\hash($digest, '', true));
 			else throw new \InvalidArgumentException('Unknown HKDF algorithm: '.$digest);
 		}
 
@@ -272,17 +257,17 @@ class Secret {
 		{
 			$length = $digests[$digest];
 		}
-		elseif ( ! is_int($length) OR $length < 1 OR $length > (255 * $digests[$digest]))
+		elseif ( ! \is_int($length) OR $length < 1 OR $length > (255 * $digests[$digest]))
 		{
 			throw new \InvalidArgumentException('HKDF output length for '.$digest.' must be an integer between 1 and '.(255 * $digests[$digest]));
 		}
 
-		self::strlen($salt) OR $salt = str_repeat("\x0", $digests[$digest]);
-		$prk = hash_hmac($digest, $key, $salt, true);
+		self::strlen($salt) OR $salt = \str_repeat("\x0", $digests[$digest]);
+		$prk = \hash_hmac($digest, $key, $salt, true);
 		$key = '';
 		for ($keyBlock = '', $blockIndex = 1; self::strlen($key) < $length; $blockIndex++)
 		{
-			$keyBlock = hash_hmac($digest, $keyBlock.$info.chr($blockIndex), $prk, true);
+			$keyBlock = \hash_hmac($digest, $keyBlock.$info.\chr($blockIndex), $prk, true);
 			$key .= $keyBlock;
 		}
 
@@ -305,14 +290,16 @@ class Secret {
 		{
 			throw new \RuntimeException('Authentication failed: Invalid length');
 		}
-		elseif (($cipherText = base64_decode($cipherText, true)) === false)
+		elseif (($cipherText = \base64_decode($cipherText, true)) === false)
 		{
+			// @codeCoverageIgnoreStart
 			throw new \RuntimeException('Authentication failed: Input data is not a valid Base64 string.');
+			// @codeCoverageIgnoreEnd
 		}
 
 		$hmacRecv = self::substr($cipherText, 0, 32);
 		$cipherText = self::substr($cipherText, 32);
-		$hmacCalc = hash_hmac('sha256', $cipherText, $hmacKey, true);
+		$hmacCalc = \hash_hmac('sha256', $cipherText, $hmacKey, true);
 
 		/**
 		 * Double HMAC verification
@@ -329,62 +316,10 @@ class Secret {
 		 * As explained, the goal is simply to change the strings being
 		 * compared, so we don't need a strong algorithm, just a fast one.
 		 */
-		if (hash_hmac('md5', $hmacRecv, $hmacKey) !== hash_hmac('md5', $hmacCalc, $hmacKey))
+		if (\hash_hmac('md5', $hmacRecv, $hmacKey) !== \hash_hmac('md5', $hmacCalc, $hmacKey))
 		{
 			throw new \RuntimeException('Authentication failed: HMAC mismatch');
 		}
-	}
-
-	/**
-	 * mcryptEncrypt()
-	 *
-	 * @param	string	$data	Plain text
-	 * @param	string	$key	Encryption key
-	 * @param	string	$iv	IV
-	 * @return	string	Cipher text
-	 */
-	private function mcryptEncrypt($data, $key, $iv)
-	{
-		return mcrypt_encrypt('rijndael-128', $key, $data, 'ctr', $iv);
-	}
-
-	/**
-	 * mcryptDecrypt()
-	 *
-	 * @param	string	$data	Cipher text
-	 * @param	string	$key	Encryption key
-	 * @param	string	$iv	IV
-	 * @return	string	Plain text
-	 */
-	private function mcryptDecrypt($data, $key, $iv)
-	{
-		return mcrypt_decrypt('rijndael-128', $key, $data, 'ctr', $iv);
-	}
-
-	/**
-	 * opensslEncrypt()
-	 *
-	 * @param	string	$data	Plain text
-	 * @param	string	$key	Encryption key
-	 * @param	string	$iv	IV
-	 * @return	string	Cipher text
-	 */
-	private function opensslEncrypt($data, $key, $iv)
-	{
-		return openssl_encrypt($data, 'aes-256-ctr', $key, 1, $iv);
-	}
-
-	/**
-	 * opensslDecrypt()
-	 *
-	 * @param	string	$data	Cipher text
-	 * @param	string	$key	Encryption key
-	 * @param	string	$iv	IV
-	 * @return	string	Plain text
-	 */
-	private function opensslDecrypt($data, $key, $iv)
-	{
-		return openssl_decrypt($data, 'aes-256-ctr', $key, 1, $iv);
 	}
 
 	/**
@@ -409,7 +344,7 @@ class Secret {
 	 */
 	private static function strlen($string)
 	{
-		return (self::$mbstringOverride === true)
+		return (\defined('MB_OVERLOAD_STRING'))
 			? \mb_strlen($string, '8bit')
 			: \strlen($string);
 	}
@@ -427,7 +362,7 @@ class Secret {
 	 */
 	private static function substr($string, $start, $length = null)
 	{
-		if (self::$mbstringOverride === true)
+		if (\defined('MB_OVERLOAD_STRING'))
 		{
 			return \mb_substr($string, $start, $length, '8bit');
 		}

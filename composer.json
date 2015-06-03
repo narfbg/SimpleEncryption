@@ -1,9 +1,9 @@
 {
 	"name": "narf/simple-encryption",
 	"type": "library",
-	"version": "0.2-alpha",
+	"version": "0.3.0",
 	"description": "A simple library for symmetric encryption under PHP",
-	"keywords": ["encryption", "crypto", "encrypt", "aes", "ctr", "hmac", "hkdf"],
+	"keywords": ["encryption", "crypto", "encrypt", "aes", "ctr", "hmac", "hkdf", "openssl"],
 	"homepage": "https://github.com/narfbg/SimpleEncryption",
 	"license": "ISC",
 	"authors": [
@@ -14,7 +14,8 @@
 		}
 	],
 	"require": {
-		"php": ">= 5.4"
+		"php": ">= 5.4",
+		"ext-openssl": "*"
 	},
 	"autoload": {
 		"psr-4": {

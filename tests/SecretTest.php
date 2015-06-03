@@ -3,203 +3,19 @@ use Narf\SimpleEncryption\Secret;
 
 class SecretTest extends PHPUnit_Framework_TestCase {
 
-	private $mcrypt, $openssl, $mbstring;
-
-	/**
-	 * Setup
-	 *
-	 * Detects MCrypt, OpenSSL, mbstring availability.
-	 */
-	public function setUp()
-	{
-		$this->mcrypt = extension_loaded('mcrypt');
-		$this->openssl = extension_loaded('openssl');
-		$this->mbstring = extension_loaded('mbstring');
-	}
-
-	/**
-	 * __construct() one-time configuration tests
-	 *
-	 * @runInSeparateProcess
-	 */
-	public function testSelfConfiguration()
-	{
-		if ( ! $this->mcrypt && ! $this->openssl)
-		{
-			try
-			{
-				new Secret('dummy');
-				return $this->fail('ext/mcrypt, ext/openssl are not available, but instantiation succeeded.');
-			}
-			catch (RuntimeException $e)
-			{
-				$this->assertEquals(
-					'No encryption handler available. You need to install one of MCrypt or OpenSSL.',
-					$e->getMessage()
-				);
-				return $this->markTestIncomplete('ext/mcrypt, ext/openssl are not available.');
-			}
-		}
-
-		// We'll need some reflection magic ...
-		$reflection = new ReflectionClass(new Secret('dummy'));
-		$handler = $reflection->getProperty('handler');
-		$mbstring = $reflection->getProperty('mbstringOverride');
-		$handler->setAccessible(true);
-		$mbstring->setAccessible(true);
-
-		$this->assertTrue(
-			$handler->isStatic(),
-			'Secret::$handler should be set only once, but is not static.'
-		);
-
-		$this->assertTrue(
-			$mbstring->isStatic(),
-			'Secret::$mbstringOverride should be set only once, but is not static.'
-		);
-
-		$this->assertEquals(
-			$this->mcrypt ? 'mcrypt' : 'openssl',
-			$handler->getValue(),
-			sprintf(
-				'Secret::$handler was not properly configured.',
-				var_export($this->mcrypt ? 'mcrypt' : 'openssl', true),
-				var_export($handler->getValue(), true)
-			)
-		);
-
-		$this->assertEquals(
-			$this->mbstring && ini_get('mbstring.func_overload'),
-			$mbstring->getValue(),
-			sprintf(
-				'Secret::$mbstringOverride was set to %s, but mbstring%s is %s enabled.',
-				var_export($mbstring->getValue(), true),
-				$this->mbstring ? '.func_overload' : '',
-				ini_get('mbstring.func_overload') ? '' : 'not'
-			)
-		);
-
-		// Configuration should only be executed once
-		$handler->setValue($this->mcrypt ? 'openssl' : 'mcrypt');
-		$mbstring->setValue( ! ($this->mbstring && ini_get('mbstring.func_overload')));
-		new Secret('dummy');
-
-		$this->assertEquals(
-			$this->mcrypt ? 'openssl' : 'mcrypt',
-			$handler->getValue(),
-			'Secret::$handler was configured twice.'
-		);
-
-		$this->assertEquals(
-			! ($this->mbstring && ini_get('mbstring.func_overload')),
-			$mbstring->getValue(),
-			'Secret::$mbstringOverride was configured twice.'
-		);
-	}
-
 	/**
 	 * strlen(), substr() generic tests
 	 *
-	 * @depends	testSelfConfiguration
 	 * @runInSeparateProcess
 	 */
-	public function testMbstringOverrideBasic()
-	{
-		list($strlen, $substr,) = $this->getMbstringOverrides();
-		$this->doMbstringOverrideAssertions($strlen, $substr);
-	}
-
-	/**
-	 * strlen(), substr() extensive tests
-	 *
-	 * This will test the override even if it's not necessary
-	 * for the library's operation on the system. Also, having
-	 * this as a separate test allows us to mark it as skipped
-	 * without preventing other tests from executing.
-	 *
-	 * @depends	testMbstringOverrideBasic
-	 * @runInSeparateProcess
-	 */
-	public function testMbstringOverrideExtensive()
-	{
-		if ( ! $this->mbstring)
-		{
-			return $this->markTestSkipped('ext/mbstring is not available.');
-		}
-		elseif (ini_get('mbstring.func_overload'))
-		{
-			return $this->markTestSkipped('mbstring.func_override is enabled');
-		}
-
-		list($strlen, $substr, $property) = $this->getMbstringOverrides();
-		$property->setValue( ! $property->getvalue());
-
-		$this->doMbstringOverrideAssertions($strlen, $substr);
-	}
-
-	/**
-	 * getMbstringOverrides()
-	 *
-	 * Returns accessible reflections for Secret::strlen(),
-	 * Secret::substr() and Secret::$mbstringOverride.
-	 *
-	 * @coversNothing
-	 */
-	private function getMbstringOverrides()
+	public function testMbstringOverride()
 	{
 		$reflection = new ReflectionClass(new Secret('dummy'));
 		$strlen = $reflection->getMethod('strlen');
 		$substr = $reflection->getMethod('substr');
-		$property = $reflection->getProperty('mbstringOverride');
 		$strlen->setAccessible(true);
 		$substr->setAccessible(true);
-		$property->setAccessible(true);
 
-		return array($strlen, $substr, $property);
-	}
-
-	/**
-	 * strlen(), a byte-safe version
-	 *
-	 * @coversNothing
-	 */
-	private function strlen($str)
-	{
-		return ($this->mbstring) ? mb_strlen($str, '8bit') : strlen($str);
-	}
-
-	/**
-	 * substr(), a byte-safe version
-	 *
-	 * @coversNothing
-	 */
-	private function substr($str, $start, $length = null)
-	{
-		if ($this->mbstring)
-		{
-			return mb_substr($str, $start, $length, '8bit');
-		}
-
-		return isset($length)
-			? substr($str, $start, $length)
-			: substr($str, $start);
-	}
-
-	/**
-	 * doMbstringOverrideAssertions()
-	 *
-	 * Convenience method to do the mbstring override assertions on
-	 * demand, as we'll probably need to do that multiple times.
-	 *
-	 * The string 'осем' is cyrilic, utf-8, which means 2 bytes per
-	 * character, or 8 in total, and it happens to mean 'eight'
-	 * in Bulgarian ;)
-	 *
-	 * @covers	Secret::strlen
-	 * @covers	Secret::substr
-	 */
-	private function doMbstringOverrideAssertions(&$strlen, &$substr)
-	{
 		$this->assertEquals(8, $strlen->invoke(null, 'осем'), 'Secret::strlen() is not byte-safe!');
 
 		$this->assertEquals('осем', $substr->invoke(null, 'осем', 0));
@@ -213,9 +29,36 @@ class SecretTest extends PHPUnit_Framework_TestCase {
 	}
 
 	/**
+	 * strlen(), a byte-safe version
+	 *
+	 * @coversNothing
+	 */
+	private function strlen($str)
+	{
+		return defined('MB_OVERLOAD_STRING') ? mb_strlen($str, '8bit') : strlen($str);
+	}
+
+	/**
+	 * substr(), a byte-safe version
+	 *
+	 * @coversNothing
+	 */
+	private function substr($str, $start, $length = null)
+	{
+		if (defined('MB_OVERLOAD_STRING'))
+		{
+			return mb_substr($str, $start, $length, '8bit');
+		}
+
+		return isset($length)
+			? substr($str, $start, $length)
+			: substr($str, $start);
+	}
+
+	/**
 	 * __construct() input sanitization
 	 *
-	 * @depends	testMbstringOverrideBasic
+	 * @depends	testMbstringOverride
 	 */
 	public function testConstructInvalidParams()
 	{
@@ -717,7 +560,7 @@ class SecretTest extends PHPUnit_Framework_TestCase {
 	 * Runs AES-256-CTR test vectors, as specified by NIST SP 800-38A, Appendix F.5.
 	 *	http://csrc.nist.gov/publications/nistpubs/800-38a/sp800-38a.pdf
 	 *
-	 * @depends	testSelfConfiguration
+	 * @coversNothing
 	 * @runInSeparateProcess
 	 */
 	public function testAES256CTR()
@@ -752,54 +595,18 @@ class SecretTest extends PHPUnit_Framework_TestCase {
 			),
 		);
 
-		$instance = new Secret('dummy');
-		$reflection = new ReflectionClass($instance);
-
-		if ($this->mcrypt)
-		{
-			$mcryptEncrypt = $reflection->getMethod('mcryptEncrypt');
-			$mcryptDecrypt = $reflection->getMethod('mcryptDecrypt');
-			$mcryptEncrypt->setAccessible(true);
-			$mcryptDecrypt->setAccessible(true);
-		}
-
-		if ($this->openssl)
-		{
-			$opensslEncrypt = $reflection->getMethod('opensslEncrypt');
-			$opensslDecrypt = $reflection->getMethod('opensslDecrypt');
-			$opensslEncrypt->setAccessible(true);
-			$opensslDecrypt->setAccessible(true);
-		}
-
 		foreach ($vectors as $block => $test)
 		{
-			if ($this->mcrypt)
-			{
-				$this->assertEquals(
-					$test['cipherText'],
-					$mcryptEncrypt->invoke($instance, $test['plainText'], $vectorsKey, $test['iv']),
-					'AES-256-CTR test vector '.$block.' failed with Secret::mcryptEncrypt()!'
-				);
-				$this->assertEquals(
-					$test['plainText'],
-					$mcryptDecrypt->invoke($instance, $test['cipherText'], $vectorsKey, $test['iv']),
-					'AES-256-CTR test vector '.$block.' failed with Secret::mcryptDecrypt()!'
-				);
-			}
-
-			if ($this->openssl)
-			{
-				$this->assertEquals(
-					$test['cipherText'],
-					$opensslEncrypt->invoke($instance, $test['plainText'], $vectorsKey, $test['iv']),
-					'AES-256-CTR test vector '.$block.' failed with Secret::opensslEncrypt()!'
-				);
-				$this->assertEquals(
-					$test['plainText'],
-					$opensslDecrypt->invoke($instance, $test['cipherText'], $vectorsKey, $test['iv']),
-					'AES-256-CTR test vector '.$block.' failed with Secret::opensslDecrypt()!'
-				);
-			}
+			$this->assertEquals(
+				$test['cipherText'],
+				openssl_encrypt($test['plainText'], 'aes-256-ctr', $vectorsKey, 1, $test['iv']),
+				'AES-256-CTR test vector '.$block.' failed!'
+			);
+			$this->assertEquals(
+				$test['plainText'],
+				openssl_decrypt($test['cipherText'], 'aes-256-ctr', $vectorsKey, 1, $test['iv']),
+				'AES-256-CTR test vector '.$block.' failed!'
+			);
 		}
 	}
 
